@@ -139,6 +139,8 @@ void PrmDbTester::runNominalSaveFile() {
     ASSERT_EVENTS_PrmFileSaveComplete(0, 2);
 }
 
+
+
 void PrmDbTester::runNominalLoadFile() {
     // Preconditions to populate the write file
     this->runNominalSaveFile();
@@ -351,32 +353,52 @@ void PrmDbTester::runFileReadError() {
     // Loop through all size errors testing each
     Os::Stub::File::Test::StaticData::setNextStatus(Os::File::OP_OK);
     this->m_errorType = FILE_SIZE_ERROR;
-    for (FwSizeType i = 0; i < 4; i++) {
+    FwSizeType xa = 0;
+    FwSizeType z = 0;
+    FwSizeType y = 0;
+
+
+    for (FwSizeType i = 0; i < 5; i++) {
         clearEvents();
-        this->m_waits = i;
+        this->m_waits = i + z;
+
+
         this->m_impl.readParamFile();
         ASSERT_EVENTS_SIZE(1);
         switch (i) {
             case 0:
                 ASSERT_EVENTS_PrmFileReadError_SIZE(1);
-                ASSERT_EVENTS_PrmFileReadError(0, PrmReadError::DELIMITER_SIZE, 0, sizeof(U8) + 1);
+                ASSERT_EVENTS_PrmFileReadError(0, PrmReadError::CRC_SIZE, sizeof(U32) + 1, 0);
+                z++;
                 break;
+            // case 1:
+            //     ASSERT_EVENTS_PrmFileReadError_SIZE(1);
+            //     ASSERT_EVENTS_PrmFileReadError(0, PrmReadError::CRC_BUFFER_SIZE, 
+            //                                    Os::Stub::File::Test::StaticData::data.pointer - sizeof(U32) + 1, 0);
+            //     break;
             case 1:
                 ASSERT_EVENTS_PrmFileReadError_SIZE(1);
-                ASSERT_EVENTS_PrmFileReadError(0, PrmReadError::RECORD_SIZE_SIZE, 0, sizeof(U32) + 1);
+                ASSERT_EVENTS_PrmFileReadError(0, PrmReadError::DELIMITER_SIZE, 0, sizeof(U8) + 1);
+                z++;
                 break;
             case 2:
                 ASSERT_EVENTS_PrmFileReadError_SIZE(1);
-                ASSERT_EVENTS_PrmFileReadError(0, PrmReadError::PARAMETER_ID_SIZE, 0, sizeof(FwPrmIdType) + 1);
+                ASSERT_EVENTS_PrmFileReadError(0, PrmReadError::RECORD_SIZE_SIZE, 0, sizeof(U32) + 1);
                 break;
             case 3:
+                ASSERT_EVENTS_PrmFileReadError_SIZE(1);
+                ASSERT_EVENTS_PrmFileReadError(0, PrmReadError::PARAMETER_ID_SIZE, 0, sizeof(FwPrmIdType) + 1);
+                break;
+            case 4:
                 ASSERT_EVENTS_PrmFileReadError_SIZE(1);
                 ASSERT_EVENTS_PrmFileReadError(0, PrmReadError::PARAMETER_VALUE_SIZE, 0, sizeof(U32) + 1);
                 break;
             default:
                 FAIL() << "Reached unknown case";
         }
+        COMMENT("hello there");
     }
+    
     // Loop through failure statuses
     for (FwSizeType i = 0; i < 2; i++) {
         this->m_errorType = FILE_STATUS_ERROR;
@@ -391,26 +413,38 @@ void PrmDbTester::runFileReadError() {
             default:
                 FAIL() << "Reached unknown case";
         }
+        
+        y = 0;
         // Loop through various field reads
-        for (FwSizeType j = 0; j < 4; j++) {
+        for (FwSizeType j = 0; j < 6; j++) {
             clearEvents();
-            this->m_waits = j;
+            this->m_waits = j + y;
             this->m_impl.readParamFile();
             ASSERT_EVENTS_SIZE(1);
             switch (j) {
                 case 0:
                     ASSERT_EVENTS_PrmFileReadError_SIZE(1);
-                    ASSERT_EVENTS_PrmFileReadError(0, PrmReadError::DELIMITER, 0, this->m_status);
+                    ASSERT_EVENTS_PrmFileReadError(0, PrmReadError::CRC, 0, this->m_status);
+        
                     break;
                 case 1:
                     ASSERT_EVENTS_PrmFileReadError_SIZE(1);
-                    ASSERT_EVENTS_PrmFileReadError(0, PrmReadError::RECORD_SIZE, 0, this->m_status);
+                    ASSERT_EVENTS_PrmFileReadError(0, PrmReadError::CRC_BUFFER, 0, this->m_status);
+                    y++;
                     break;
                 case 2:
                     ASSERT_EVENTS_PrmFileReadError_SIZE(1);
-                    ASSERT_EVENTS_PrmFileReadError(0, PrmReadError::PARAMETER_ID, 0, this->m_status);
+                    ASSERT_EVENTS_PrmFileReadError(0, PrmReadError::DELIMITER, 0, this->m_status);
                     break;
                 case 3:
+                    ASSERT_EVENTS_PrmFileReadError_SIZE(1);
+                    ASSERT_EVENTS_PrmFileReadError(0, PrmReadError::RECORD_SIZE, 0, this->m_status);
+                    break;
+                case 4:
+                    ASSERT_EVENTS_PrmFileReadError_SIZE(1);
+                    ASSERT_EVENTS_PrmFileReadError(0, PrmReadError::PARAMETER_ID, 0, this->m_status);
+                    break;
+                case 5:
                     ASSERT_EVENTS_PrmFileReadError_SIZE(1);
                     ASSERT_EVENTS_PrmFileReadError(0, PrmReadError::PARAMETER_VALUE, 0, this->m_status);
                     break;
@@ -419,19 +453,27 @@ void PrmDbTester::runFileReadError() {
             }
         }
     }
+    xa = 0;
     this->m_errorType = FILE_DATA_ERROR;
-    for (FwSizeType i = 0; i < 2; i++) {
+    for (FwSizeType i = 0; i < 3; i++) {
         clearEvents();
-        this->m_waits = i;
+        this->m_waits = i + xa;
         this->m_impl.readParamFile();
         ASSERT_EVENTS_SIZE(1);
         switch (i) {
-            case 0:
+             case 0:
+                ASSERT_EVENTS_PrmFileBadCrc_SIZE(1);
+                // Parameter read error caused by adding one to the expected read
+                ASSERT_EVENTS_PrmFileBadCrc(0, 0x33d79cd4, 0xc180712b);
+                xa++;
+                break;
+            case 1:
                 ASSERT_EVENTS_PrmFileReadError_SIZE(1);
                 // Parameter read error caused by adding one to the expected read
                 ASSERT_EVENTS_PrmFileReadError(0, PrmReadError::DELIMITER_VALUE, 0, PRMDB_ENTRY_DELIMITER + 1);
+                xa++;
                 break;
-            case 1: {
+            case 2: {
                 // Data in this test is corrupted by adding 1 to the first data byte read. Since data is stored in
                 // big-endian format the highest order byte of the record size (U32) must have one added to it.
                 // Expected result of '8' inherited from original design of test.
@@ -447,6 +489,8 @@ void PrmDbTester::runFileReadError() {
 }
 
 void PrmDbTester::runFileWriteError() {
+    FwSizeType zb = 0;
+
     // File open error
     this->clearEvents();
     // register interceptor
@@ -471,10 +515,12 @@ void PrmDbTester::runFileWriteError() {
     // Loop through all size errors testing each
     Os::Stub::File::Test::StaticData::setNextStatus(Os::File::OP_OK);
     this->m_errorType = FILE_SIZE_ERROR;
+
+
     for (FwSizeType i = 0; i < 4; i++) {
         clearEvents();
         this->clearHistory();
-        this->m_waits = i;
+        this->m_waits = i + zb;
         this->sendCmd_PRM_SAVE_FILE(0, 12);
         stat = this->m_impl.doDispatch();
         ASSERT_EQ(stat, Fw::QueuedComponentBase::MSG_DISPATCH_OK);
@@ -483,10 +529,12 @@ void PrmDbTester::runFileWriteError() {
             case 0:
                 ASSERT_EVENTS_PrmFileWriteError_SIZE(1);
                 ASSERT_EVENTS_PrmFileWriteError(0, PrmWriteError::DELIMITER_SIZE, 0, sizeof(U8) + 1);
+                zb++;
                 break;
             case 1:
                 ASSERT_EVENTS_PrmFileWriteError_SIZE(1);
                 ASSERT_EVENTS_PrmFileWriteError(0, PrmWriteError::RECORD_SIZE_SIZE, 0, sizeof(U32) + 1);
+                
                 break;
             case 2:
                 ASSERT_EVENTS_PrmFileWriteError_SIZE(1);
@@ -518,7 +566,7 @@ void PrmDbTester::runFileWriteError() {
                 FAIL() << "Reached unknown case";
         }
         // Loop through various field reads
-        for (FwSizeType j = 0; j < 4; j++) {
+        for (FwSizeType j = 0; j < 5; j++) {
             clearEvents();
             this->clearHistory();
             this->m_waits = j;
@@ -529,17 +577,21 @@ void PrmDbTester::runFileWriteError() {
             switch (j) {
                 case 0:
                     ASSERT_EVENTS_PrmFileWriteError_SIZE(1);
-                    ASSERT_EVENTS_PrmFileWriteError(0, PrmWriteError::DELIMITER, 0, this->m_status);
+                    ASSERT_EVENTS_PrmFileWriteError(0, PrmWriteError::CRC_PLACE, 0, this->m_status);
                     break;
                 case 1:
                     ASSERT_EVENTS_PrmFileWriteError_SIZE(1);
-                    ASSERT_EVENTS_PrmFileWriteError(0, PrmWriteError::RECORD_SIZE, 0, this->m_status);
+                    ASSERT_EVENTS_PrmFileWriteError(0, PrmWriteError::DELIMITER, 0, this->m_status);
                     break;
                 case 2:
                     ASSERT_EVENTS_PrmFileWriteError_SIZE(1);
-                    ASSERT_EVENTS_PrmFileWriteError(0, PrmWriteError::PARAMETER_ID, 0, this->m_status);
+                    ASSERT_EVENTS_PrmFileWriteError(0, PrmWriteError::RECORD_SIZE, 0, this->m_status);
                     break;
                 case 3:
+                    ASSERT_EVENTS_PrmFileWriteError_SIZE(1);
+                    ASSERT_EVENTS_PrmFileWriteError(0, PrmWriteError::PARAMETER_ID, 0, this->m_status);
+                    break;
+                case 4:
                     ASSERT_EVENTS_PrmFileWriteError_SIZE(1);
                     ASSERT_EVENTS_PrmFileWriteError(0, PrmWriteError::PARAMETER_VALUE, 0, this->m_status);
                     break;
@@ -1303,7 +1355,10 @@ Os::File::Status PrmDbTester::PrmDbTestFile::read(U8* buffer, FwSizeType& size, 
                 status = s_tester->m_status;
                 break;
             case FILE_SIZE_ERROR:
-                size += 1;
+                // CINDY FIXME, see if I can do this with incrementing m_waits
+                if (size != 0) {
+                    size += 1;
+                }
                 break;
             case FILE_DATA_ERROR:
                 buffer[0] += 1;

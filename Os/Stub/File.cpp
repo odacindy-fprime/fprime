@@ -24,6 +24,11 @@ StubFile::Status StubFile::position(FwSizeType& position_result) {
     Status status = Status::NOT_SUPPORTED;
     return status;
 }
+// CINDY FIXME: is this needed?
+StubFile::Status StubFile::CINDYposition(FwSizeType& position_result) {
+    Status status = Status::NOT_SUPPORTED;
+    return status;
+}
 
 StubFile::Status StubFile::preallocate(FwSizeType offset, FwSizeType length) {
     Status status = Status::NOT_SUPPORTED;

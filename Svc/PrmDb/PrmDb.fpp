@@ -37,6 +37,7 @@ module Svc {
       CRC
       CRC_SIZE
       CRC_BUFFER
+      CRC_BUFFER_SIZE
       SEEK_ZERO
     }
 

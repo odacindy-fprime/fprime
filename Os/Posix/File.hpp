@@ -86,6 +86,7 @@ class PosixFile : public FileInterface {
     //! \return OP_OK on success otherwise error status
     //!
     Status position(FwSizeType& position_result) override;
+    Status CINDYposition(FwSizeType& position_result) override;
 
     //! \brief pre-allocate file storage
     //!

@@ -60,6 +60,10 @@ struct StaticData {
     //! File pointer
     FwSizeType pointer = 0;
 
+
+    //FwSizeType CINDYsavePointer = 0;
+
+
     //! Status to return from open
     Os::File::Status openStatus = Os::File::Status::OP_OK;
     //! Status to return from size
@@ -181,6 +185,8 @@ class TestFile : public FileInterface {
     //! \return OP_OK on success otherwise error status
     //!
     Status position(FwSizeType& position_result) override;
+    Status CINDYposition(FwSizeType& position_result) override;
+
 
     //! \brief pre-allocate file storage
     //!

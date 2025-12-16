@@ -112,6 +112,8 @@ class FileInterface {
     //! \return OP_OK on success otherwise error status
     //!
     virtual Status position(FwSizeType& position_result) = 0;
+    virtual Status CINDYposition(FwSizeType& position_result) = 0;
+
 
     //! \brief pre-allocate file storage
     //!
@@ -343,6 +345,8 @@ class File final : public FileInterface {
     //! \return OP_OK on success otherwise error status
     //!
     Status position(FwSizeType& position_result) override;
+    Status CINDYposition(FwSizeType& position_result) override;
+
 
     //! \brief pre-allocate file storage
     //!

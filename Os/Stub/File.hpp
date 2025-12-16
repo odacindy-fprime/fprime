@@ -66,6 +66,7 @@ class StubFile : public FileInterface {
     //! \return NOT_IMPLEMENTED
     //!
     Status position(FwSizeType& position_result) override;
+    Status CINDYposition(FwSizeType& position_result) override;
 
     //! \brief pre-allocate file storage
     //!

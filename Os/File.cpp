@@ -5,6 +5,9 @@
 #include <Fw/Types/Assert.hpp>
 #include <Os/File.hpp>
 
+#include <cstdio> // CINDY FIXME remove
+
+
 extern "C" {
 #include <Utils/Hash/libcrc/lib_crc.h>  // borrow CRC
 }
@@ -99,6 +102,16 @@ File::Status File::position(FwSizeType& position_result) {
         return File::Status::NOT_OPENED;
     }
     return this->m_delegate.position(position_result);
+}
+
+File::Status File::CINDYposition(FwSizeType& position_result) {
+    FW_ASSERT(&this->m_delegate == reinterpret_cast<FileInterface*>(&this->m_handle_storage[0]));
+    FW_ASSERT((0 <= this->m_mode) && (this->m_mode < Mode::MAX_OPEN_MODE));
+    // Check that the file is open before attempting operation
+    if (OPEN_NO_MODE == this->m_mode) {
+        return File::Status::NOT_OPENED;
+    }
+    return this->m_delegate.CINDYposition(position_result);
 }
 
 File::Status File::preallocate(FwSizeType offset, FwSizeType length) {
@@ -200,6 +213,7 @@ File::Status File::write(const U8* buffer, FwSizeType& size, File::WaitType wait
         size = 0;
         return File::Status::INVALID_MODE;
     }
+    //printf("CINDY File::write():  size=%llu\n", size);
     return this->m_delegate.write(buffer, size, wait);
 }
 

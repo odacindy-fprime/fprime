@@ -85,10 +85,20 @@ FileInterface::Status TestFile::preallocate(FwSizeType offset, FwSizeType length
     return StaticData::data.preallocateStatus;
 }
 
+FileInterface::Status TestFile::CINDYposition(FwSizeType& position_result) {
+    // CINDY FIXME make a different POSITION_FN if we keep this function since we are hijacking this one
+    StaticData::data.lastCalled = StaticData::POSITION_FN;  
+    position_result = StaticData::data.pointer;
+    return StaticData::data.positionStatus;
+}
+
 FileInterface::Status TestFile::seek(FwSignedSizeType offset, SeekType seekType) {
     StaticData::data.seekOffset = offset;
     StaticData::data.seekType = seekType;
     StaticData::data.lastCalled = StaticData::SEEK_FN;
+    //  CINDY FIXME temporary  hack
+    //StaticData::data.CINDYsavePointer = StaticData::data.pointer;
+    StaticData::data.pointer = offset;
     return StaticData::data.seekStatus;
 }
 

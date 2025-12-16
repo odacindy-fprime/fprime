@@ -154,6 +154,19 @@ PosixFile::Status PosixFile::position(FwSizeType& position_result) {
     return status;
 }
 
+PosixFile::Status PosixFile::CINDYposition(FwSizeType& position_result) {
+    Status status = OP_OK;
+    position_result = 0;
+    off_t actual = ::lseek(this->m_handle.m_file_descriptor, 0, SEEK_CUR);
+    if (PosixFileHandle::ERROR_RETURN_VALUE == actual) {
+        int errno_store = errno;
+        status = Os::Posix::errno_to_file_status(errno_store);
+    }
+    // Protected by static assertion (FwSizeType >= off_t)
+    position_result = static_cast<FwSizeType>(actual);
+    return status;
+}
+
 PosixFile::Status PosixFile::preallocate(FwSizeType offset, FwSizeType length) {
     PosixFile::Status status = Os::File::Status::NOT_SUPPORTED;
     // Check for larger size than posix supports

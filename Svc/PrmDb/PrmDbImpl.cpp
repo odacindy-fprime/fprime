@@ -123,10 +123,12 @@ void PrmDbImpl::pingIn_handler(FwIndexType portNum, U32 key) {
 }
 
 // CINDY FIXME. what do I change NATIVE_UINT_TYPE  to for size?
-U32 PrmDbImpl::computeCrc(U32 crc, const U8* buff, FwSizeType size) {
+U32 PrmDbImpl::computeCrc(U32 crc, const BYTE* buff, FwSizeType size) {
+    FW_ASSERT(buff);
     for (FwSizeType byte = 0; byte < size; byte++) {
         crc = static_cast<U32>(update_crc_32(crc, static_cast<char>(buff[byte])));
     }   
+    //printf("CINDY computeCrc: size=%d\n", static_cast<I32>(size));
     return crc;
 }       
 
@@ -142,6 +144,7 @@ void PrmDbImpl::PRM_SAVE_FILE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq) {
 
     Os::File paramFile;
     WorkingBuffer buff;
+
 
     Os::File::Status stat = paramFile.open(this->m_fileName.toChar(), Os::File::OPEN_WRITE);
     if (stat != Os::File::OP_OK) {
@@ -160,7 +163,6 @@ void PrmDbImpl::PRM_SAVE_FILE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq) {
         this->cmdResponse_out(opCode, cmdSeq, Fw::CmdResponse::EXECUTION_ERROR);
         return;
     }
-
 
     this->lock();
     t_dbStruct* db = getDbPtr(PrmDbType::DB_ACTIVE);
@@ -192,6 +194,8 @@ void PrmDbImpl::PRM_SAVE_FILE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq) {
 
             // add delimiter to CRC
             crc = this->computeCrc(crc, &delim, sizeof(delim));
+            printf("file: %s, line: %d, CINDY PRM_SAVE_FILE_cmdHandler: crc for the delimiter=0x%08x, writeSize = 1, this->m_fileName=%s\n ", 
+                __FILE__, __LINE__, crc, this->m_fileName.toChar());
 
             // serialize record size = id field + data
             U32 recordSize = static_cast<U32>(sizeof(FwPrmIdType) + db[entry].val.getSize());
@@ -219,7 +223,11 @@ void PrmDbImpl::PRM_SAVE_FILE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq) {
                 return;
             }
 
+            // add recordSize to CRC
             crc = this->computeCrc(crc, buff.getBuffAddr(), writeSize);
+            printf("file: %s, line: %d CINDY PRM_SAVE_FILE_cmdHandler: add recordSize %u  to crc=0x%08x, writeSize=%llu\n ", 
+                __FILE__, __LINE__, recordSize, crc, static_cast<unsigned  long long>(writeSize));
+
 
             // reset buffer
             buff.resetSer();
@@ -233,12 +241,14 @@ void PrmDbImpl::PRM_SAVE_FILE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq) {
             // write parameter ID
             writeSize = static_cast<FwSizeType>(buff.getSize());
             stat = paramFile.write(buff.getBuffAddr(), writeSize, Os::File::WaitType::WAIT);
+
             if (stat != Os::File::OP_OK) {
                 this->unLock();
                 this->log_WARNING_HI_PrmFileWriteError(PrmWriteError::PARAMETER_ID, static_cast<I32>(numRecords), stat);
                 this->cmdResponse_out(opCode, cmdSeq, Fw::CmdResponse::EXECUTION_ERROR);
                 return;
             }
+
             if (writeSize != static_cast<FwSizeType>(buff.getSize())) {
                 this->unLock();
                 this->log_WARNING_HI_PrmFileWriteError(PrmWriteError::PARAMETER_ID_SIZE, static_cast<I32>(numRecords),
@@ -247,11 +257,12 @@ void PrmDbImpl::PRM_SAVE_FILE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq) {
                 return;
             }
 
-            // add to CRC
+            // add to parameter ID to CRC
             crc = this->computeCrc(crc,buff.getBuffAddr(),writeSize);
+            printf("file=%s, line: %d CINDY PRM_SAVE_FILE_cmdHandler: param ID to paramFile writeSize=%d, buff.getSize=%d, with param ID crc=0x%08x\n ", 
+                __FILE__, __LINE__, static_cast<I32>(writeSize), static_cast<I32>(buff.getSize()), crc);
 
             // write serialized parameter value
-
             writeSize = static_cast<FwSizeType>(db[entry].val.getSize());
             stat = paramFile.write(db[entry].val.getBuffAddr(), writeSize, Os::File::WaitType::WAIT);
             if (stat != Os::File::OP_OK) {
@@ -269,7 +280,7 @@ void PrmDbImpl::PRM_SAVE_FILE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq) {
                 return;
             }
 
-            // add serialized value to crc
+            // add serializedparameter value to crc
             crc = this->computeCrc(crc, db[entry].val.getBuffAddr(),writeSize);
 
             numRecords++;
@@ -278,16 +289,70 @@ void PrmDbImpl::PRM_SAVE_FILE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq) {
 
     this->unLock();
 
+    // save current location of pointer  in paramFile
+    FwSizeType currPosInParamFile;
+
+    stat = paramFile.CINDYposition(currPosInParamFile);
+    // CINDY FIXME this  is temporary  until we do final fix.
+    if (stat != Os::File::OP_OK) {
+        printf("CINDY: If we do it this way, make an EVR");
+        this->cmdResponse_out(opCode, cmdSeq, Fw::CmdResponse::EXECUTION_ERROR);
+                return;
+    }
+    printf("file=%s, line: %d CINDY PRM_SAVE_FILE_cmdHandler: currPosInParamFile=%d\n ", 
+        __FILE__, __LINE__, static_cast<I32>(currPosInParamFile));
+
     // seek to beginning and write CRC value
     paramFile.seek(0, Os::File::SeekType::ABSOLUTE);
     writeSize = static_cast<FwSizeType>(sizeof(crc));
+
+
+
+
+    printf("file=%s, line: %d CINDY PRM_SAVE_FILE_cmdHandler: final CRC to paramFile writeSize=%d, final crc=0x%08x\n ", 
+        __FILE__, __LINE__, static_cast<I32>(writeSize),  crc);
     stat = paramFile.write(reinterpret_cast<const U8*>(&crc), writeSize, Os::File::WaitType::WAIT);
     if (stat != Os::File::OP_OK) {
         this->log_WARNING_HI_PrmFileWriteError(PrmWriteError::CRC_REAL, 0, stat);
         this->cmdResponse_out(opCode, cmdSeq, Fw::CmdResponse::EXECUTION_ERROR);
         return;
     }
+    printf("file=%s, line: %d CINDY PRM_SAVE_FILE_cmdHandler: stat after final CRC write to paramFile: stat=%d\n ", 
+        __FILE__, __LINE__, static_cast<I32>(stat));
+   
+    // Restore pointer to end of paramFile
+       
+    paramFile.seek(static_cast<FwSignedSizeType>(currPosInParamFile), Os::File::SeekType::ABSOLUTE);
 
+   // CINDY FIMXE
+    //paramFile.close();
+
+
+    //---------------------------------
+    // CINDY confirm that write worked
+    /*
+    stat = paramFile.open("TestFile.prm", Os::File::OPEN_READ);
+    if (stat != Os::File::OP_OK) {
+        printf("FOOBAR1 stat=%d, fileName=%s\n", static_cast<I32>(stat), "TestFile.prm");
+
+    }
+    U32 fileCrc;
+    FwSizeType readSize = static_cast<FwSizeType>(sizeof(fileCrc));
+
+    paramFile.seek(0, Os::File::SeekType::ABSOLUTE);
+
+    stat = paramFile.read(reinterpret_cast<U8*>(&fileCrc), readSize);
+    if (stat != Os::File::OP_OK) {
+        printf("FOOBAR2 stat=%d, readSize=%d, crc=0x%08x\n", static_cast<I32>(stat), static_cast<I32>(readSize), fileCrc);
+    } else {
+        printf("FOOBAR3 stat=%d, readSize=%d, crc=0x%08x\n", static_cast<I32>(stat), static_cast<I32>(readSize), fileCrc);
+
+    }
+    */
+
+    //---------------------------------
+
+    
 
     this->log_ACTIVITY_HI_PrmFileSaveComplete(numRecords);
     this->cmdResponse_out(opCode, cmdSeq, Fw::CmdResponse::OK);
@@ -387,49 +452,77 @@ PrmDbImpl::PrmLoadStatus PrmDbImpl::readParamFileImpl(const Fw::StringBase& file
         return  PrmLoadStatus::ERROR;
 
     }
-
+    printf("file: %s, line: %d, CINDY PrmDbImpl::readParamFileImpl: crc from beginning of file (fileCrc)=0x%08x, readSize = %d\n ",
+                __FILE__, __LINE__, fileCrc, static_cast<I32>(readSize));
     if (readSize != sizeof(fileCrc)) {
         this->log_WARNING_HI_PrmFileReadError(PrmReadError::CRC_SIZE, static_cast<I32>(readSize), stat);
         return  PrmLoadStatus::ERROR;
 
     }
 
+
     readSize = PRMDB_CRC_BUFFER_SIZE;
     FwSizeType crcChunk = 0;
     U32 crc = 0xFFFFFFFF;
+    /*======================
+    FwSizeType cindyPosition;
+    FwSizeType crcBufferSize;
+    ======================*/
+    
     // read into CRC buffer for checking
 
     while (readSize != 0) {
-        // CINDY FIXME determine which one works
-        //readSize = static_cast<FwSizeType>(PRMDB_CRC_BUFFER_SIZE);
+        
+        
         readSize = PRMDB_CRC_BUFFER_SIZE;
         Os::File::Status fStat = paramFile.read(this->m_crcBuffer, readSize, Os::File::NO_WAIT);
         if (fStat != Os::File::OP_OK) {
             this->log_WARNING_HI_PrmFileReadError(PrmReadError::CRC_BUFFER, static_cast<I32>(crcChunk), fStat);
             return  PrmLoadStatus::ERROR;
-
         }
+
+/* =======================
+        fStat =  paramFile.CINDYposition(cindyPosition);
+        printf("CINDY cindyPosition=%d\n", static_cast<I32>(cindyPosition));
+        //  CINDY FIXME determine if we need a new warnning evr if this call to CINDYposition  fails
+        // if (fStat != Os::File::OP_OK) {
+        //     this->log_WARNING_HI_PrmFileWriteError(PrmReadError::CRC_BUFFER_SIZE,0,stat);
+        //     return  PrmLoadStatus::ERROR;
+        // }
+        crcBufferSize = cindyPosition - static_cast<FwSizeType>(sizeof(fileCrc));
+        if (! ((readSize == crcBufferSize) or ((readSize == 0) && (crcChunk > 0)) )) {
+            this->log_WARNING_HI_PrmFileReadError(PrmReadError::CRC_BUFFER_SIZE, static_cast<I32>(readSize), fStat);
+            return  PrmLoadStatus::ERROR;
+        }
+====================*/
+
 
         crc = this->computeCrc(crc, this->m_crcBuffer, readSize);
 
+        printf("CINDY readParamFileImpl: while loop for DB entries: computeCrc: crc=0x%08x, crcChunk=%d, readSize=%d\n", crc, static_cast<I32>(crcChunk), static_cast<I32>(readSize));
+          
         crcChunk++;
     }
 
     if (fileCrc != crc) {
+        printf("CINDY fileCrc and crc did not match\n");
         this->log_WARNING_HI_PrmFileBadCrc(fileCrc, crc);
         return  PrmLoadStatus::ERROR;
 
     }
-
+ printf("CINDYfileCrc and crc matched\n");
 
     // seek back to just after CRC
     stat = paramFile.seek(sizeof(fileCrc), Os::File::SeekType::ABSOLUTE);
     if (stat != Os::File::OP_OK) {
+         printf("CINDY first paramFile.seek failed\n");
+
         this->log_WARNING_HI_PrmFileReadError(PrmReadError::SEEK_ZERO, 0, stat);
         return  PrmLoadStatus::ERROR;
     }
-    //===========================================================================
+    printf("CINDY first paramFile.seek succeeded\n");
 
+    //=========================================================================
     WorkingBuffer buff;
 
     U32 recordNumTotal = 0;
@@ -555,6 +648,9 @@ PrmDbImpl::PrmLoadStatus PrmDbImpl::readParamFileImpl(const Fw::StringBase& file
         recordNumTotal++;
     }
 
+    printf("CINDY PrmFileLoadComplete\n");
+
+
     this->log_ACTIVITY_HI_PrmFileLoadComplete(dbString, recordNumTotal, recordNumAdded, recordNumUpdated);
     return PrmLoadStatus::SUCCESS;
 }
@@ -563,16 +659,21 @@ PrmDbImpl::PrmUpdateType PrmDbImpl::updateAddPrmImpl(FwPrmIdType id, Fw::ParamBu
     t_dbStruct* db = getDbPtr(prmDbType);
 
     PrmUpdateType updateStatus = NO_SLOTS;
+    U32 CINDY_tmp;
 
     this->lock();
     // search for existing entry
     bool existingEntry = false;
+    val.deserializeTo(CINDY_tmp);
+
 
     for (FwSizeType entry = 0; entry < PRMDB_NUM_DB_ENTRIES; entry++) {
         if ((db[entry].used) && (id == db[entry].id)) {
             db[entry].val = val;
             existingEntry = true;
             updateStatus = PARAM_UPDATED;
+            printf("CINDY: updateAddPrmPImpl: PARAM_UPDATED entry=%d, id=0x%08x, val=0x%08x\n",
+                static_cast<I32>(entry), static_cast<U32>(id), CINDY_tmp);
             break;
         }
     }
@@ -585,6 +686,8 @@ PrmDbImpl::PrmUpdateType PrmDbImpl::updateAddPrmImpl(FwPrmIdType id, Fw::ParamBu
                 db[entry].id = id;
                 db[entry].used = true;
                 updateStatus = PARAM_ADDED;
+                printf("CINDY: updateAddPrmPImpl: PARAM_ADDED entry=%d, id=0x%08x, val=0x%08x\n",
+                static_cast<I32>(entry), static_cast<U32>(id), CINDY_tmp);
                 break;
             }
         }
